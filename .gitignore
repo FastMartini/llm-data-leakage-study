@@ -1,0 +1,86 @@
+# -----------------------------
+# Why: Prevent committing virtual environments (huge + machine-specific)
+# -----------------------------
+venv/
+.venv/
+env/
+ENV/
+
+# -----------------------------
+# Why: Python cache files are auto-generated and useless in version control
+# -----------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# -----------------------------
+# Why: Jupyter notebook checkpoints are temporary autosaves
+# -----------------------------
+.ipynb_checkpoints/
+
+# -----------------------------
+# Why: OS-specific junk files
+# -----------------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------------
+# Why: IDE/editor configs (user-specific, not portable)
+# -----------------------------
+.vscode/
+.idea/
+
+# -----------------------------
+# Why: Environment variables (API keys, secrets)
+# -----------------------------
+.env
+.env.*
+
+# -----------------------------
+# Why: Dataset files (can be large + reproducible via scripts)
+# -----------------------------
+data/
+datasets/
+*.csv
+*.tsv
+*.json
+
+# -----------------------------
+# Why: Model checkpoints and weights (very large files)
+# -----------------------------
+models/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.h5
+
+# -----------------------------
+# Why: Training logs and experiment outputs
+# -----------------------------
+logs/
+results/
+outputs/
+wandb/
+mlruns/
+
+# -----------------------------
+# Why: Temporary files
+# -----------------------------
+*.tmp
+*.log
+
+# -----------------------------
+# Why: Coverage + testing artifacts
+# -----------------------------
+.coverage
+htmlcov/
+.pytest_cache/
+
+# -----------------------------
+# Why: Packaging/build artifacts
+# -----------------------------
+dist/
+build/
+*.egg-info/
