@@ -14,7 +14,17 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
 # Why: these metrics provide a stronger evaluation than plain accuracy alone.
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_auc_score,
+    roc_curve,
+)
+
+# Why: matplotlib is used to visualize the ROC curve so you can show separability of members vs non-members.
+import matplotlib.pyplot as plt
 
 
 # Why: this helper computes Shannon entropy, which measures how uncertain the model is about a prediction.
@@ -138,6 +148,9 @@ def run_learned_attack(attack_df, random_state=42):
     # Why: predict_proba gives membership scores used for ROC-AUC, which is a stronger separability metric.
     y_scores = attack_model.predict_proba(X_test)[:, 1]
 
+    # Why: ROC curve points let us visualize the tradeoff between true positive rate and false positive rate.
+    fpr, tpr, thresholds = roc_curve(y_test, y_scores)
+
     # Why: these metrics give a more complete view of the attack's success.
     return {
         "accuracy": accuracy_score(y_test, y_pred),
@@ -145,8 +158,39 @@ def run_learned_attack(attack_df, random_state=42):
         "recall": recall_score(y_test, y_pred),
         "f1": f1_score(y_test, y_pred),
         "roc_auc": roc_auc_score(y_test, y_scores),
+        "fpr": fpr,
+        "tpr": tpr,
+        "roc_thresholds": thresholds,
         "attack_model": attack_model,
     }
+
+
+# Why: this helper draws the ROC curve so you can visually explain how well the learned attack separates the two classes.
+def plot_roc_curve(fpr, tpr, roc_auc):
+    # Why: creating a dedicated figure keeps the ROC visualization clean and presentation-ready.
+    plt.figure(figsize=(8, 6))
+
+    # Why: this line shows the actual ROC curve traced by varying the decision threshold.
+    plt.plot(fpr, tpr, label=f"Learned Attack ROC Curve (AUC = {roc_auc:.3f})", linewidth=2)
+
+    # Why: this diagonal line represents random guessing and gives an easy visual baseline for comparison.
+    plt.plot([0, 1], [0, 1], linestyle="--", label="Random Guessing")
+
+    # Why: axis labels make the math interpretation of the plot immediately clear.
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+
+    # Why: the title tells the audience exactly what model and metric they are looking at.
+    plt.title("ROC Curve for Learned Membership Inference Attack")
+
+    # Why: the legend helps distinguish the learned attack from the random baseline.
+    plt.legend(loc="lower right")
+
+    # Why: the grid improves readability when discussing specific parts of the curve during presentation.
+    plt.grid(True)
+
+    # Why: show displays the plot window so you can immediately inspect or present the result.
+    plt.show()
 
 
 # Why: this function runs the full upgraded attack pipeline from target-model training to attack evaluation.
@@ -240,3 +284,11 @@ if __name__ == "__main__":
     # Why: this preview lets you inspect what the attack dataset actually looks like.
     print("=== Attack Feature Preview ===")
     print(results["attack_dataframe_preview"])
+    print()
+
+    # Why: plotting the ROC curve gives a visual explanation of how well the learned attack separates members and non-members.
+    plot_roc_curve(
+        results["learned_attack"]["fpr"],
+        results["learned_attack"]["tpr"],
+        results["learned_attack"]["roc_auc"],
+    )
