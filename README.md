@@ -1,159 +1,188 @@
-# Membership Inference Attack (MIA)
+# Membership Inference Attack (MIA) Project Guide
 
 ## Overview
 
 This project demonstrates a **membership inference attack (MIA)** on a machine learning model trained on text data.
 
-A membership inference attack tries to answer the following question:
+A membership inference attack asks a very specific privacy question:
 
-> Given a piece of data and the model's behavior on that data, can we guess whether that piece of data was used during training?
+> Given a data sample and the model’s output on that sample, can we infer whether that sample was part of the model’s training set?
 
-That is the core privacy question behind this experiment.
+That question matters because a model may reveal private information **without directly revealing the training data itself**. If an attacker can determine that a specific person’s record was used in training, that can already be a privacy leak.
 
-This project is organized into three Python files:
+This guide is written for beginners. It explains:
+- what **membership** means
+- what each Python file does
+- what each major block of code is doing
+- why the project is structured this way
+- how to talk about the project clearly in a presentation
+
+---
+
+# What “Membership” Means
+
+In this project, **membership** means:
+
+> whether a specific data point was used during the training of the target model
+
+That gives every sample a binary label:
+
+- `1` = **member**
+- `0` = **non-member**
+
+
+---
+
+# Why Membership Matters
+
+At first, this may seem like a small detail. But in real privacy-sensitive applications, membership can reveal important facts.
+
+For example:
+
+- If a model was trained on hospital records, membership might reveal whether a person’s medical record was included.
+- If a model was trained on private emails, membership might reveal whether someone’s email was used.
+- If a model was trained on legal or financial documents, membership might reveal whether a specific document was part of training.
+
+That is why membership inference is considered a **privacy attack**.
+
+The model does not need to reveal the full text of the private record for privacy harm to happen. Simply revealing whether that record was included can already be sensitive.
+
+---
+
+# Simple Analogy
+
+Imagine a student studies 500 flashcards before a quiz.
+
+Later, you show the student 1,000 flashcards:
+- 500 that they studied
+- 500 that they never saw
+
+If the student answers some cards with much higher confidence, you may guess:
+
+> “That was probably part of the study set.”
+
+That is exactly the idea behind membership inference.
+
+Translate the analogy like this:
+
+- **Student** = trained model
+- **Studied flashcards** = training samples
+- **New flashcards** = unseen samples
+- **Confidence of answer** = attack signal
+
+The attacker is trying to detect whether the model behaves differently on things it has seen before.
+
+---
+
+# Project Structure
+
+This project is organized into three files:
 
 1. `dataset.py`
 2. `train.py`
 3. `attack.py`
 
-Each file has a specific role:
+Each file has a specific purpose:
 
-- `dataset.py` prepares the data
-- `train.py` builds and trains the target model
-- `attack.py` tries to infer which samples were part of training
+- `dataset.py` prepares the dataset
+- `train.py` trains the target model
+- `attack.py` performs the privacy attack
 
-This markdown file explains:
-- the purpose of each file
-- the purpose of each major function
-- the meaning of the important machine learning concepts
-- how the entire pipeline works from beginning to end
-- why each design decision matters
+This is a good design because each file has one main job. That makes the code easier to understand, test, explain, and present.
 
 ---
 
-# What Is a Membership Inference Attack?
+# Full Pipeline
 
-Before discussing the code, it is important to understand the idea behind the project.
+The experiment works like this:
 
-Imagine a student studies 500 flashcards before a quiz. Then you show the student 1,000 flashcards:
-- 500 they studied before
-- 500 they have never seen
-
-Now you try to guess which flashcards they studied by looking at how confidently they answer.
-
-If they respond very quickly and confidently to the studied flashcards, and more cautiously to the new ones, then you might be able to tell which flashcards were part of their study set.
-
-That is very similar to what a membership inference attack does.
-
-In machine learning terms:
-
-- The **student** is the trained model
-- The **flashcards it studied** are the training samples
-- The **new flashcards** are unseen samples
-- The **confidence of the answers** becomes the signal that the attacker uses
-
-The privacy concern is that a model may accidentally reveal whether a certain record was used during training.
-
-That matters because the training data may contain private information such as:
-- medical records
-- financial data
-- private emails
-- private conversations
-- personal text documents
-
-If an attacker can determine that a certain person's data was part of training, that can already be a privacy leak, even if the model does not reveal the full contents directly.
-
----
-
-# High-Level Project Flow
-
-The full experiment works like this:
-
-1. Load a labeled dataset of text
-2. Split it into:
-   - **members**: data the model will train on
-   - **non-members**: data the model will never see during training
+1. Load the IMDB dataset
+2. Create two groups:
+   - members
+   - non-members
 3. Convert text into numbers using TF-IDF
-4. Train a target model on the member set only
-5. Ask the target model for confidence scores on both groups
-6. Compare confidence on members versus non-members
-7. Use that difference to perform a membership inference attack
+4. Train a sentiment classifier on members only
+5. Ask the classifier for probability outputs on both groups
+6. Extract behavior-based attack signals
+7. Use those signals to infer membership
 
-In this project, the dataset is the **IMDB movie review dataset**.
+So this project really involves **two tasks**:
 
-Each review has:
+## Task 1: Target model task
+Predict sentiment:
+- positive
+- negative
+
+## Task 2: Attack model task
+Predict membership:
+- member
+- non-member
+
+That is what makes the project more sophisticated than ordinary text classification.
+
+---
+
+# Why the IMDB Dataset Was Chosen
+
+The IMDB dataset is a good fit because:
+
+- it is text-based
+- it already has labels
+- it is easy to explain
+- it comes with train/test splits
+- it works well with standard text-classification tools
+- it is large enough to sample from
+
+Each IMDB example contains:
 - review text
 - sentiment label
 
 The sentiment label is:
-- `0` = negative review
-- `1` = positive review
+- `0` = negative
+- `1` = positive
 
----
-
-# Why IMDB Was Chosen
-
-The IMDB dataset is a strong choice for a controlled experiment because:
-
-- it is a clean text classification dataset
-- it already comes with labels
-- it has separate training and test splits
-- it is easy to explain
-- it is large enough to sample from
-- it works well with baseline models like logistic regression
-
-This makes it a very good dataset for demonstrating privacy leakage in a simple, controlled setting.
+This gives the project a clean classification task while still allowing you to study privacy leakage.
 
 ---
 
 # File 1: `dataset.py`
 
-## Purpose of `dataset.py`
+## Purpose
 
-This file is responsible for **loading the IMDB dataset and creating the two groups needed for the attack**.
+`dataset.py` is responsible for preparing the data.
 
-Those two groups are:
+Its job is to decide:
+- which samples become members
+- which samples become non-members
 
-- **members**: data the model will train on
-- **non-members**: data the model will not train on
-
-Without these two groups, there is no membership inference experiment.
-
----
-
-## Core Idea of `dataset.py`
-
-The main job of this file is to answer:
-
-> Which reviews belong to training, and which reviews stay unseen?
-
+Without that split, the rest of the project cannot exist.
 
 ---
 
 ## Code
 
 ```python
-# Why: load_dataset downloads and loads the IMDB dataset from Hugging Face.
+# Why: load_dataset downloads and loads the IMDB dataset in a structured format.
 from datasets import load_dataset
 
-# Why: train_test_split lets us sample smaller, reproducible member and non-member subsets.
+# Why: train_test_split helps us create reproducible member and non-member subsets.
 from sklearn.model_selection import train_test_split
 
 
-# Why: putting the dataset logic in a function makes it reusable from train.py and attack.py.
+# Why: this function centralizes dataset loading and splitting so the rest of the project can reuse it.
 def load_data(member_size=500, non_member_size=500, random_state=42):
-    # Why: this downloads and loads the full IMDB dataset into memory.
+    # Why: this loads the full IMDB dataset, including official train and test splits.
     dataset = load_dataset("imdb")
 
-    # Why: these are the full official train texts and labels that we will sample members from.
+    # Why: these are the full text and label lists from the official training split.
     train_texts_full = dataset["train"]["text"]
     train_labels_full = dataset["train"]["label"]
 
-    # Why: these are the full official test texts and labels that we will sample non-members from.
+    # Why: these are the full text and label lists from the official test split.
     test_texts_full = dataset["test"]["text"]
     test_labels_full = dataset["test"]["label"]
 
-    # Why: members are sampled from the training split because the target model will train on them.
+    # Why: members must come from the training split because the target model will see them during training.
     member_texts, _, member_labels, _ = train_test_split(
         train_texts_full,
         train_labels_full,
@@ -162,7 +191,7 @@ def load_data(member_size=500, non_member_size=500, random_state=42):
         random_state=random_state,
     )
 
-    # Why: non-members are sampled from the test split so they remain unseen during training.
+    # Why: non-members must come from the test split so they remain unseen by the target model.
     non_member_texts, _, non_member_labels, _ = train_test_split(
         test_texts_full,
         test_labels_full,
@@ -171,140 +200,78 @@ def load_data(member_size=500, non_member_size=500, random_state=42):
         random_state=random_state,
     )
 
-    # Why: returning these four objects makes the dataset easy to reuse elsewhere.
+    # Why: returning these four objects gives downstream files exactly what they need.
     return member_texts, member_labels, non_member_texts, non_member_labels
 
 
-# Why: this block lets you run dataset.py directly for a quick sanity check without affecting imports.
+# Why: this block lets you test dataset loading directly without affecting imports in other files.
 if __name__ == "__main__":
-    # Why: load the default dataset split so we can verify everything is working.
+    # Why: load the default controlled experiment split for a sanity check.
     member_texts, member_labels, non_member_texts, non_member_labels = load_data()
 
-    # Why: these prints confirm the two groups were created with the expected sizes.
+    # Why: these prints confirm the split sizes are correct.
     print("Members:", len(member_texts))
     print("Non-members:", len(non_member_texts))
 
-    # Why: these prints help verify that labels exist and the text looks correct.
+    # Why: these prints help verify that the data looks valid.
     print("First member label:", member_labels[0])
     print("First member review preview:", member_texts[0][:200])
 ```
 
 ---
 
-## Step-by-Step Explanation of `dataset.py`
+## Detailed Explanation
 
-### 1. Importing `load_dataset`
+### `from datasets import load_dataset`
 
-```python
-from datasets import load_dataset
-```
+This imports the Hugging Face dataset loader.
 
-This import comes from the Hugging Face `datasets` library.
-
-Its purpose is to make it easy to download and load prepared datasets.
-
-Instead of manually:
-- downloading a CSV file
-- unzipping it
-- parsing it
-- organizing train/test splits
-
-you can use a single function call:
-
-```python
-load_dataset("imdb")
-```
-
-That makes the project much cleaner and easier to reproduce.
+Why this matters:
+- it saves you from downloading files manually
+- it keeps the experiment reproducible
+- it makes the setup cleaner for demonstrations
 
 ---
 
-### 2. Importing `train_test_split`
+### `from sklearn.model_selection import train_test_split`
 
-```python
-from sklearn.model_selection import train_test_split
-```
+This imports a function that can split or sample data.
 
-This function is commonly used in machine learning to split data into different groups.
+In this project, it is used to create smaller controlled subsets:
+- 500 members
+- 500 non-members
 
-In this project, it is used to create smaller subsets:
-- 500 member reviews
-- 500 non-member reviews
-
-We do not use the full 25,000 reviews in each split because this is a controlled experiment and smaller subsets are easier to:
-- run quickly
-- inspect
-- debug
-- explain
-- overfit slightly if needed
+This keeps the experiment manageable and easier to explain.
 
 ---
 
-### 3. The `load_data()` function
+### `def load_data(...)`
 
-```python
-def load_data(member_size=500, non_member_size=500, random_state=42):
-```
-
-This function wraps the dataset logic into one reusable unit.
+This function wraps all of the dataset logic into one reusable place.
 
 That means:
-- `train.py` can import and reuse it
-- `attack.py` can reuse it indirectly through `train.py`
+- `train.py` can reuse it
+- `attack.py` can indirectly reuse it through `train.py`
 
-This is better than writing the same logic multiple times.
-
-#### Parameters
-
-- `member_size=500`
-  - number of training samples to use as members
-- `non_member_size=500`
-  - number of unseen samples to use as non-members
-- `random_state=42`
-  - makes the random sampling reproducible
-
-### Why reproducibility matters
-
-If you run a random split without fixing the random seed, you may get different samples every time.
-
-That makes results harder to:
-- compare
-- debug
-- report
-
-Using `random_state=42` means the same subset is chosen each time, assuming the dataset stays the same.
+This is better than copying the same code into multiple files.
 
 ---
 
-### 4. Loading the full dataset
-
-```python
-dataset = load_dataset("imdb")
-```
+### `dataset = load_dataset("imdb")`
 
 This downloads and loads the IMDB dataset.
 
-The dataset has two official parts:
-
+The IMDB dataset already includes:
 - `dataset["train"]`
 - `dataset["test"]`
 
-Each item in the dataset looks like:
-
-```python
-{
-    "text": "This movie was fantastic ...",
-    "label": 1
-}
-```
-
-So each review contains:
-- the text of the review
-- the sentiment label
+This is useful because it gives you a natural way to define:
+- members from train
+- non-members from test
 
 ---
 
-### 5. Extracting texts and labels
+### Extracting texts and labels
 
 ```python
 train_texts_full = dataset["train"]["text"]
@@ -314,242 +281,179 @@ test_texts_full = dataset["test"]["text"]
 test_labels_full = dataset["test"]["label"]
 ```
 
-This separates the raw inputs from the labels.
+Machine learning usually separates:
+- **inputs** = the data the model reads
+- **labels** = the correct answers
 
-This is a common pattern in machine learning:
-
-- **inputs** are what the model reads
-- **labels** are the correct answers the model tries to learn
-
-In this case:
-- inputs = movie review text
-- labels = positive or negative sentiment
+Here:
+- inputs = review text
+- labels = sentiment
 
 ---
 
-### 6. Creating the member set
+### Creating the member set
 
 ```python
-member_texts, _, member_labels, _ = train_test_split(
-    train_texts_full,
-    train_labels_full,
-    train_size=member_size,
-    stratify=train_labels_full,
-    random_state=random_state,
-)
+member_texts, _, member_labels, _ = train_test_split(...)
 ```
 
-This samples the member set from the official training split.
+The member set is sampled from the training split.
 
-These samples are called **members** because the model will later train on them.
+These samples are members because the target model will actually train on them later.
 
-#### Why use training data for members?
-
-Because the model must truly see these samples during training.
-
-If a sample is supposed to be a member, it must actually be part of the training process.
+That is why the word **membership** is meaningful here.
 
 ---
 
-### 7. Understanding `stratify=train_labels_full`
+### `stratify=train_labels_full`
 
-This is very important.
+This preserves label balance.
 
-`stratify=train_labels_full` tells the splitting function to preserve the label balance.
-
-That means if the original data is roughly balanced between:
+That means your smaller subset should still have a reasonable balance of:
 - positive reviews
 - negative reviews
 
-then the sampled subset will also be roughly balanced.
-
-This matters because a badly imbalanced subset can distort:
-- model training
-- confidence behavior
-- attack results
+This helps keep the experiment fair and stable.
 
 ---
 
-### 8. Creating the non-member set
+### Creating the non-member set
 
 ```python
-non_member_texts, _, non_member_labels, _ = train_test_split(
-    test_texts_full,
-    test_labels_full,
-    train_size=non_member_size,
-    stratify=test_labels_full,
-    random_state=random_state,
-)
+non_member_texts, _, non_member_labels, _ = train_test_split(...)
 ```
 
-This samples the non-member set from the official test split.
+The non-member set is sampled from the official test split.
 
 These reviews are never shown to the model during training.
 
-That is why they are valid non-members.
-
-#### Why sample from the official test split?
-
-Because the official test split is already separate from the training split.
-
-That makes the setup clean and easy to defend:
-- no overlap
-- no accidental leakage
-- clear experiment design
+That makes them valid non-members.
 
 ---
 
-### 9. Returning the four objects
+### `return ...`
 
-```python
-return member_texts, member_labels, non_member_texts, non_member_labels
-```
-
-These four outputs are exactly what the next stage needs.
-
-They represent:
-- member inputs
+This returns the four objects needed by the next stage:
+- member texts
 - member labels
-- non-member inputs
+- non-member texts
 - non-member labels
 
 ---
 
-### 10. The `if __name__ == "__main__":` block
+### `if __name__ == "__main__":`
 
-```python
-if __name__ == "__main__":
-```
+This lets the file behave in two ways:
+- as a script when run directly
+- as a module when imported elsewhere
 
-This line is often confusing for beginners.
-
-Here is the simple explanation:
-
-- If you run `python dataset.py` directly, this block runs.
-- If another file imports `dataset.py`, this block does not run.
-
-That lets the file serve two roles:
-- a reusable module
-- a standalone test script
-
-This is very helpful because you can:
-- import `load_data()` into `train.py`
-- still run `dataset.py` by itself to check that the data setup is working
-
----
-
-## What You Should Expect When Running `dataset.py`
-
-When you run:
+If you run:
 
 ```bash
 python dataset.py
 ```
 
-you should see:
-- `Members: 500`
-- `Non-members: 500`
-- the label of the first member
-- a preview of the first review
+it will print:
+- how many members you have
+- how many non-members you have
+- a small review preview
 
-That confirms the dataset preparation stage is working.
+That is helpful for checking whether the data stage works.
 
 ---
 
 # File 2: `train.py`
 
-## Purpose of `train.py`
+## Purpose
 
-This file trains the **target model**.
+`train.py` trains the **target model**.
 
-In a membership inference attack project, the target model is the model being attacked.
+The target model is the model that will later be attacked.
 
-So the point of `train.py` is to:
-- receive the member and non-member data
-- convert the text into numerical features
-- train a classifier on members only
-- report how the model performs
+In this project, the target model learns sentiment classification:
+- positive review
+- negative review
+
+But from the privacy side, what really matters is this:
+
+> Does the target model behave differently on training samples than on unseen samples?
+
+If the answer is yes, that difference may create privacy leakage.
 
 ---
 
-## Why Text Must Be Converted Into Numbers
+## Why text must be converted into numbers
 
-Machine learning models cannot understand raw text directly.
+A model cannot directly understand raw text.
 
 For example, a model cannot directly process:
 
-```text
-"This movie was amazing and emotional."
-```
+> "This movie was fantastic."
 
-It needs numbers, not plain sentences.
+It needs numerical input.
 
-That is why we use **TF-IDF**.
-
-TF-IDF turns text into numerical vectors.
+That is why `train.py` uses **TF-IDF**.
 
 ---
 
-## What Is TF-IDF?
+## What TF-IDF does
 
 TF-IDF stands for:
+- Term Frequency
+- Inverse Document Frequency
 
-- **Term Frequency**
-- **Inverse Document Frequency**
+It converts each review into a vector of numbers based on the importance of words.
 
-The basic idea is:
+General intuition:
+- words that appear frequently in one review may matter
+- words that appear in almost every review may matter less
 
-- words that appear often in one review may be important
-- words that appear in almost every review may be less important
-
-For example:
-- a word like `"movie"` appears in many reviews, so it is not very special
-- a word like `"masterpiece"` may be more informative for sentiment
-
-TF-IDF assigns weights to words based on this idea.
-
-So each review becomes a vector of numbers representing the importance of words.
+This gives the model a numeric representation of language.
 
 ---
 
 ## Code
 
 ```python
-# Why: we import the prepared member and non-member data from dataset.py instead of duplicating data logic.
+# Why: load_data gives us the prepared member and non-member groups from dataset.py.
 from dataset import load_data
 
-# Why: TfidfVectorizer converts raw review text into numerical features the classifier can learn from.
+# Why: TfidfVectorizer converts raw text into numerical feature vectors the model can learn from.
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-# Why: LogisticRegression is a simple, fast baseline model for text classification.
+# Why: LogisticRegression is a simple and effective baseline model for text classification.
 from sklearn.linear_model import LogisticRegression
 
 
-# Why: wrapping the training workflow in a function makes it reusable from attack.py.
-def train_target_model():
-    # Why: load the member and non-member sets for the controlled experiment.
-    member_texts, member_labels, non_member_texts, non_member_labels = load_data()
+# Why: this function handles the full target-model training workflow and returns everything needed later.
+def train_target_model(member_size=500, non_member_size=500, random_state=42):
+    # Why: load the controlled experiment data so the target model only trains on members.
+    member_texts, member_labels, non_member_texts, non_member_labels = load_data(
+        member_size=member_size,
+        non_member_size=non_member_size,
+        random_state=random_state,
+    )
 
-    # Why: the vectorizer learns a vocabulary from member data only, which matches a real training setup.
+    # Why: the vectorizer learns a vocabulary from member data only, which avoids leakage from unseen data.
     vectorizer = TfidfVectorizer(max_features=5000, stop_words="english")
 
-    # Why: fit_transform learns the vocabulary on training members and converts them into feature vectors.
+    # Why: fit_transform learns the vocabulary from member text and converts it into feature vectors.
     X_member = vectorizer.fit_transform(member_texts)
 
-    # Why: transform applies that same vocabulary to unseen non-member reviews.
+    # Why: transform applies the same learned vocabulary to non-member text without refitting.
     X_non_member = vectorizer.transform(non_member_texts)
 
-    # Why: this is the target model that the membership inference attack will later probe.
-    model = LogisticRegression(max_iter=1000, random_state=42)
+    # Why: the target model is the classifier we will later attack.
+    model = LogisticRegression(max_iter=1000, random_state=random_state)
 
-    # Why: the model must train only on member data so those samples truly count as members.
+    # Why: the model must only train on members for the membership labels to be meaningful.
     model.fit(X_member, member_labels)
 
-    # Why: these scores give a quick sanity check before moving to the attack stage.
+    # Why: these scores show how differently the model behaves on seen versus unseen data.
     member_accuracy = model.score(X_member, member_labels)
     non_member_accuracy = model.score(X_non_member, non_member_labels)
 
-    # Why: returning everything needed later keeps attack.py simple.
+    # Why: returning a dictionary keeps the code organized and makes attack.py easier to write.
     return {
         "model": model,
         "vectorizer": vectorizer,
@@ -564,897 +468,401 @@ def train_target_model():
     }
 
 
-# Why: this block lets you run train.py directly to verify the target model trains correctly.
+# Why: this block lets you run train.py directly to verify target-model training.
 if __name__ == "__main__":
-    # Why: train the model and capture all returned experiment objects.
+    # Why: train the model and capture all relevant outputs.
     results = train_target_model()
 
-    # Why: print accuracies so we can check whether the model behaves differently on members vs non-members.
+    # Why: print these values so you can inspect whether the target model behaves differently on members and non-members.
     print("Member accuracy:", results["member_accuracy"])
     print("Non-member accuracy:", results["non_member_accuracy"])
 ```
 
 ---
 
-## Step-by-Step Explanation of `train.py`
+## Detailed Explanation
 
-### 1. Importing `load_data`
+### `from dataset import load_data`
 
-```python
-from dataset import load_data
-```
+This imports the data-preparation function from `dataset.py`.
 
-This allows `train.py` to reuse the logic from `dataset.py`.
-
-That means `train.py` does not need to know how the dataset was built internally.
-It just receives the prepared groups.
-
-This is a good example of modular design:
-- one file handles data preparation
+This is good project organization because:
+- one file handles data
 - one file handles training
 
 ---
 
-### 2. Importing `TfidfVectorizer`
+### `from sklearn.feature_extraction.text import TfidfVectorizer`
 
-```python
-from sklearn.feature_extraction.text import TfidfVectorizer
-```
+This imports the text vectorizer.
 
-This tool converts text into a matrix of numbers.
+Its job is to translate text into numbers.
 
-That matrix is usually called a **feature matrix**.
-
-Each row represents one review.
-Each column represents one word or token from the learned vocabulary.
-Each value represents the TF-IDF weight.
+Without this, the target model would have no numerical features to learn from.
 
 ---
 
-### 3. Importing `LogisticRegression`
+### `from sklearn.linear_model import LogisticRegression`
 
-```python
-from sklearn.linear_model import LogisticRegression
-```
+This imports the target classifier.
 
-Despite the name, logistic regression is often used for classification tasks.
-
-In this project, it predicts:
-- negative review
-- positive review
+Even though the name includes “regression,” logistic regression is widely used for classification tasks.
 
 It is a strong baseline because it is:
-- fast
 - simple
-- easy to interpret
-- good for text classification when paired with TF-IDF
+- fast
+- standard
+- easy to explain in a presentation
 
 ---
 
-### 4. The `train_target_model()` function
+### `member_texts, ... = load_data(...)`
 
-This function performs the full training workflow.
-
-It:
-1. loads the member and non-member data
-2. vectorizes both groups
-3. trains the model on member data
-4. evaluates the model
-5. returns all useful outputs
-
----
-
-### 5. Loading the data
-
-```python
-member_texts, member_labels, non_member_texts, non_member_labels = load_data()
-```
-
-This retrieves the data prepared earlier.
+This loads the member and non-member sets.
 
 At this point:
-- `member_texts` are training reviews
-- `member_labels` are training sentiments
-- `non_member_texts` are unseen reviews
-- `non_member_labels` are unseen sentiments
+- members are training data
+- non-members are unseen data
+
+That split is what gives the attack meaning.
 
 ---
 
-### 6. Creating the vectorizer
+### `vectorizer = TfidfVectorizer(...)`
 
-```python
-vectorizer = TfidfVectorizer(max_features=5000, stop_words="english")
-```
+This creates the TF-IDF processor.
 
-This creates the text-to-numbers converter.
+#### `max_features=5000`
+Keeps at most 5,000 vocabulary terms.
 
-#### What `max_features=5000` means
+This helps:
+- control model size
+- keep memory use reasonable
+- simplify the experiment
 
-The vectorizer will keep at most 5,000 of the most useful words.
-
-This is helpful because:
-- it reduces memory usage
-- it keeps the model manageable
-- it avoids making the feature space too large for a small experiment
-
-#### What `stop_words="english"` means
-
-Common English words such as:
+#### `stop_words="english"`
+Removes very common words such as:
 - the
-- is
 - and
+- is
 - of
 
-are removed.
-
-These words usually do not add much meaning for sentiment classification.
-
-Removing them helps focus the model on more informative words.
+These words usually add little sentiment information.
 
 ---
 
-### 7. Fitting on member data only
+### `X_member = vectorizer.fit_transform(member_texts)`
 
-```python
-X_member = vectorizer.fit_transform(member_texts)
-```
+This line does two things:
+1. learns the vocabulary from member data
+2. converts member text into vectors
 
-This is one of the most important lines in the project.
-
-`fit_transform` does two things:
-- **fit**: learn the vocabulary from the training data
-- **transform**: convert the training text into numerical vectors
-
-#### Why fit only on members?
-
-Because in a real training setup, the feature extraction process should be based only on the training data.
-
-If you learn vocabulary from both members and non-members together, you accidentally leak information from the non-member set into training.
-
-That would make the experiment less clean.
+This is important because vocabulary learning should come only from training data.
 
 ---
 
-### 8. Transforming non-members
+### `X_non_member = vectorizer.transform(non_member_texts)`
 
-```python
-X_non_member = vectorizer.transform(non_member_texts)
-```
+This applies the already-learned vocabulary to non-member text.
 
-This applies the same vocabulary to the unseen reviews.
+Notice that it does **not** use `fit_transform`.
 
-Notice that we use `transform`, not `fit_transform`.
+That is intentional.
 
-That is because we do not want to relearn the vocabulary on the unseen data.
-
-We only want to encode the unseen data using the vocabulary learned from the member set.
+Why:
+- non-members should not influence the vocabulary
+- this keeps the setup honest
 
 ---
 
-### 9. Creating the model
+### `model = LogisticRegression(...)`
 
-```python
-model = LogisticRegression(max_iter=1000, random_state=42)
-```
+This creates the target model.
 
-This creates the target classifier.
+#### `max_iter=1000`
+Gives the optimizer enough iterations to converge.
 
-#### What `max_iter=1000` means
-
-Logistic regression uses an optimization process to learn.
-Sometimes the default number of iterations is not enough.
-
-Setting `max_iter=1000` gives the optimization more room to converge properly.
-
-#### What `random_state=42` does
-
-This improves reproducibility.
+#### `random_state=random_state`
+Helps keep the run reproducible.
 
 ---
 
-### 10. Training the model
+### `model.fit(X_member, member_labels)`
 
-```python
-model.fit(X_member, member_labels)
-```
+This trains the target model on members only.
 
-This is where the model actually learns.
+That is why the membership labels remain meaningful.
 
-It studies:
-- the numerical TF-IDF vectors
-- the correct sentiment labels
-
-and learns patterns that help distinguish positive reviews from negative reviews.
-
-For example, it may learn that words like:
-- excellent
-- amazing
-- emotional
-
-are associated with positive reviews, while words like:
-- boring
-- terrible
-- waste
-
-are associated with negative reviews.
+If you accidentally trained on both members and non-members, the privacy experiment would break.
 
 ---
 
-### 11. Evaluating member accuracy
+### `member_accuracy = model.score(...)`
 
-```python
-member_accuracy = model.score(X_member, member_labels)
-```
+This checks how accurate the model is on the same data it trained on.
 
-This checks how accurate the model is on data it trained on.
-
-This is often called **training accuracy**.
-
-A high member accuracy is normal because the model has already seen these examples.
+This is usually high.
 
 ---
 
-### 12. Evaluating non-member accuracy
+### `non_member_accuracy = model.score(...)`
 
-```python
-non_member_accuracy = model.score(X_non_member, non_member_labels)
-```
+This checks how accurate the model is on unseen data.
 
-This checks how accurate the model is on data it has never seen.
+This is often lower than member accuracy.
 
-This is similar to testing generalization.
-
-Often:
-- member accuracy is higher
-- non-member accuracy is lower
-
-This difference can suggest some degree of memorization or overfitting.
-
-That matters because membership inference attacks often become easier when a model behaves noticeably differently on training versus unseen data.
-
----
-
-### 13. Returning a dictionary of results
-
-The function returns a dictionary containing:
-- the model
-- the vectorizer
-- the raw texts
-- the labels
-- the feature matrices
-- the accuracy values
-
-This makes `attack.py` much easier to write because all needed pieces are already packaged together.
-
----
-
-## What You Should Expect When Running `train.py`
-
-When you run:
-
-```bash
-python train.py
-```
-
-you should see something like:
-
-```text
-Member accuracy: 0.98
-Non-member accuracy: 0.83
-```
-
-Your exact values may differ.
-
-The important point is not the exact number.
-The important point is whether the model tends to do better or feel more confident on members.
+That difference can reflect overfitting or memorization, which may increase privacy leakage.
 
 ---
 
 # File 3: `attack.py`
 
-## Purpose of `attack.py`
+## Purpose
 
-This is the file that performs the actual membership inference attack.
+`attack.py` performs the membership inference attack.
 
-Its purpose is to use the model's output behavior to guess membership.
+Its job is to use the target model’s behavior to predict whether a sample was:
+- a member
+- a non-member
 
----
-
-## Main Attack Idea
-
-The first version of the attack is intentionally simple.
-
-It uses **confidence scores**.
-
-The reasoning is:
-
-- If the model is more confident on a sample, that sample may have been part of training
-- If the model is less confident, that sample may be unseen
-
-So the attack looks at the model's confidence and turns it into a membership guess.
+This is the privacy part of the project.
 
 ---
 
-## What Is Confidence?
+## Main idea
 
-When the model predicts a class, it can also output probabilities.
+The target model never explicitly says:
 
-For example, for a review, it might say:
+- “yes, I trained on this review”
+- “no, I did not train on this review”
 
-```python
-[0.03, 0.97]
-```
+So the attacker must infer membership indirectly.
 
-That means:
-- 3% negative
-- 97% positive
+The attacker uses behavior-based signals such as:
+- confidence
+- true-class confidence
+- loss
+- entropy
+- correctness
 
-The highest probability is `0.97`, so the model is very confident.
+These signals can differ between:
+- samples seen during training
+- samples never seen during training
 
-If instead the model outputs:
+---
 
-```python
-[0.48, 0.52]
-```
+## What the attack features mean
 
-it is much less certain.
+### Max confidence
+How certain the model is about its chosen label.
 
-The attack uses this difference in certainty.
+### True-class confidence
+How much probability the model assigns to the correct label.
+
+### Loss
+How well the model fits the true label.
+
+### Entropy
+How uncertain the model is overall.
+
+### Correctness
+Whether the model predicted the label correctly.
+
+These signals together create an attack dataset.
 
 ---
 
 ## Code
 
 ```python
-# Why: we import the trained model pipeline so attack.py can focus only on attack logic.
+# Why: this gives attack.py access to the trained target model and its feature matrices.
 from train import train_target_model
 
-# Why: numpy helps compute confidence scores and attack metrics cleanly.
+# Why: numpy is used for efficient numeric operations on model outputs and derived attack features.
 import numpy as np
 
-# Why: accuracy_score gives us a quick measure of how well the attack guessed membership.
-from sklearn.metrics import accuracy_score
+# Why: pandas makes it easier to organize attack features into a readable table-like structure.
+import pandas as pd
+
+# Why: train_test_split is used to create a train/test split for the attack model itself.
+from sklearn.model_selection import train_test_split
+
+# Why: LogisticRegression is used here again as a simple attack model that predicts member vs non-member.
+from sklearn.linear_model import LogisticRegression
+
+# Why: these metrics provide a stronger evaluation than plain accuracy alone.
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 
 
-# Why: this helper extracts the model's maximum class probability for each sample as a confidence score.
-def get_confidence_scores(model, features):
-    # Why: predict_proba returns probability scores for each class, which are central to this attack.
-    probabilities = model.predict_proba(features)
+# Why: this helper computes Shannon entropy, which measures how uncertain the model is about a prediction.
+def compute_entropy(probabilities):
+    # Why: clipping prevents log(0), which would be undefined and break the calculation.
+    clipped_probabilities = np.clip(probabilities, 1e-12, 1.0)
 
-    # Why: the maximum probability represents how confident the model feels about its prediction.
-    confidence_scores = np.max(probabilities, axis=1)
-
-    return confidence_scores
+    # Why: entropy is lower when the model is very certain and higher when the model is more uncertain.
+    return -np.sum(clipped_probabilities * np.log(clipped_probabilities), axis=1)
 
 
-# Why: this function runs a threshold-based membership inference attack using model confidence.
-def run_membership_inference_attack():
-    # Why: train the target model first so we have something to attack.
-    results = train_target_model()
+# Why: this helper computes the negative log probability of the true class, which is the sample loss.
+def compute_true_class_loss(probabilities, true_labels):
+    # Why: clipping prevents log(0) and keeps the loss calculation numerically stable.
+    clipped_probabilities = np.clip(probabilities, 1e-12, 1.0)
 
-    # Why: pull out the trained model and both feature matrices for attack evaluation.
-    model = results["model"]
-    X_member = results["X_member"]
-    X_non_member = results["X_non_member"]
+    # Why: this selects the predicted probability assigned to the true class for each sample.
+    true_class_probabilities = clipped_probabilities[np.arange(len(true_labels)), true_labels]
 
-    # Why: these are the true membership labels the attack will try to recover.
-    true_member_flags = np.ones(X_member.shape[0], dtype=int)
-    true_non_member_flags = np.zeros(X_non_member.shape[0], dtype=int)
-
-    # Why: confidence on members and non-members is the main signal used by this first attack.
-    member_confidences = get_confidence_scores(model, X_member)
-    non_member_confidences = get_confidence_scores(model, X_non_member)
-
-    # Why: combining the scores lets us evaluate the attack on one merged set.
-    all_confidences = np.concatenate([member_confidences, non_member_confidences])
-
-    # Why: combining the true labels gives us the correct membership ground truth for evaluation.
-    true_membership = np.concatenate([true_member_flags, true_non_member_flags])
-
-    # Why: this threshold uses the midpoint between average member and non-member confidence as a simple baseline rule.
-    threshold = (member_confidences.mean() + non_member_confidences.mean()) / 2
-
-    # Why: if a sample's confidence is above the threshold, we guess it was part of training.
-    predicted_membership = (all_confidences >= threshold).astype(int)
-
-    # Why: this measures how often our attack guessed membership correctly.
-    attack_accuracy = accuracy_score(true_membership, predicted_membership)
-
-    # Why: returning details helps you inspect the attack instead of just seeing one number.
-    return {
-        "threshold": threshold,
-        "attack_accuracy": attack_accuracy,
-        "member_confidence_mean": member_confidences.mean(),
-        "non_member_confidence_mean": non_member_confidences.mean(),
-        "member_confidences": member_confidences,
-        "non_member_confidences": non_member_confidences,
-    }
+    # Why: lower loss usually indicates the model handled that sample more confidently and correctly.
+    return -np.log(true_class_probabilities)
 
 
-# Why: this block lets you run the attack directly and inspect the basic results.
-if __name__ == "__main__":
-    # Why: execute the confidence-threshold attack from start to finish.
-    attack_results = run_membership_inference_attack()
+# Why: this helper converts target-model behavior into attack features for one set of samples.
+def build_attack_features(model, feature_matrix, true_labels, membership_label):
+    # Why: predict_proba is the core signal source because it gives probability behavior for each sample.
+    probabilities = model.predict_proba(feature_matrix)
 
-    # Why: these prints summarize whether the model tends to be more confident on members than non-members.
-    print("Attack threshold:", attack_results["threshold"])
-    print("Attack accuracy:", attack_results["attack_accuracy"])
-    print("Average member confidence:", attack_results["member_confidence_mean"])
-    print("Average non-member confidence:", attack_results["non_member_confidence_mean"])
+    # Why: predict returns the final class label so we can see whether the target model was correct.
+    predictions = model.predict(feature_matrix)
+
+    # Why: max confidence is a common membership signal because training samples often receive stronger confidence.
+    max_confidence = np.max(probabilities, axis=1)
+
+    # Why: true-class confidence measures how much probability the model assigned to the correct label specifically.
+    true_class_confidence = probabilities[np.arange(len(true_labels)), true_labels]
+
+    # Why: loss is often stronger than plain confidence because it directly measures how well the model fits a sample.
+    true_class_loss = compute_true_class_loss(probabilities, true_labels)
+
+    # Why: entropy captures uncertainty and can reveal whether the model is more certain on members.
+    entropy = compute_entropy(probabilities)
+
+    # Why: correctness is a useful binary signal because members may be predicted correctly more often.
+    correctness = (predictions == np.array(true_labels)).astype(int)
+
+    # Why: every attack row must carry the true membership label so the attack model can learn from it.
+    membership = np.full(len(true_labels), membership_label)
+
+    # Why: packaging attack signals into a DataFrame makes the attack dataset easy to inspect and use.
+    attack_df = pd.DataFrame(
+        {
+            "max_confidence": max_confidence,
+            "true_class_confidence": true_class_confidence,
+            "loss": true_class_loss,
+            "entropy": entropy,
+            "correctness": correctness,
+            "membership": membership,
+        }
+    )
+
+    return attack_df
 ```
 
 ---
 
-## Step-by-Step Explanation of `attack.py`
+## Detailed Explanation
 
-### 1. Importing `train_target_model`
+### `from train import train_target_model`
 
-```python
-from train import train_target_model
-```
+This imports the trained target-model pipeline.
 
-This allows `attack.py` to reuse the training pipeline.
-
-That means `attack.py` does not need to manually:
-- load the data
-- create TF-IDF features
-- build the model
-
-It can simply call the training function and receive everything it needs.
+That means `attack.py` does not have to repeat training logic.
 
 ---
 
-### 2. Importing NumPy
+### Why NumPy is used
 
-```python
-import numpy as np
-```
+`numpy` handles:
+- arrays
+- math
+- indexing
+- probability-based calculations
 
-NumPy is used for numerical operations such as:
-- combining arrays
-- computing maximum values
-- creating label arrays
-- averaging confidence scores
-
-It is one of the most common libraries in Python for numerical computing.
-
----
-
-### 3. Importing `accuracy_score`
-
-```python
-from sklearn.metrics import accuracy_score
-```
-
-This function compares:
-- the true membership labels
-- the predicted membership labels
-
-and returns the fraction of correct guesses.
-
-If the attack accuracy is:
-- `0.50`, it is about random guessing for a balanced setup
-- above `0.50`, it has some success
-- much higher than `0.50`, it indicates stronger leakage
+It is especially useful for:
+- entropy
+- loss
+- combining attack signals
 
 ---
 
-### 4. The helper function `get_confidence_scores`
+### Why pandas is used
 
-```python
-def get_confidence_scores(model, features):
-```
+`pandas` makes the attack features easier to organize and inspect.
 
-This function extracts one confidence number per sample.
+Instead of handling loose arrays everywhere, you can create a table with columns like:
+- max confidence
+- loss
+- entropy
+- correctness
+- membership
 
-Inside it:
-
-```python
-probabilities = model.predict_proba(features)
-```
-
-This asks the model for class probabilities.
-
-For a binary sentiment task, each prediction contains two probabilities:
-- probability of negative
-- probability of positive
-
-Then:
-
-```python
-confidence_scores = np.max(probabilities, axis=1)
-```
-
-takes the larger of the two probabilities.
-
-That larger probability is the model's confidence in its chosen label.
-
-For example:
-
-```python
-[0.10, 0.90] -> 0.90
-[0.45, 0.55] -> 0.55
-```
-
-This simple score becomes the attack signal.
+That makes the attack model cleaner and easier to explain.
 
 ---
 
-### 5. The main function `run_membership_inference_attack()`
+### `compute_entropy(probabilities)`
 
-This function runs the full attack.
+Entropy measures uncertainty.
 
----
+Examples:
+- `[0.99, 0.01]` → low entropy, very certain
+- `[0.50, 0.50]` → high entropy, very uncertain
 
-### 6. Training the target model
-
-```python
-results = train_target_model()
-```
-
-This gives the attacker access to the trained model and its data representations.
-
-From the returned dictionary, the attack extracts:
-- the model
-- member feature matrix
-- non-member feature matrix
+Models are often more certain on training data, so entropy can be a useful membership signal.
 
 ---
 
-### 7. Creating the true membership labels
+### `compute_true_class_loss(probabilities, true_labels)`
 
-```python
-true_member_flags = np.ones(X_member.shape[0], dtype=int)
-true_non_member_flags = np.zeros(X_non_member.shape[0], dtype=int)
-```
+Loss measures how well the model handled the true label.
 
-This creates the ground-truth answers for attack evaluation.
+If the model assigns a high probability to the correct class, loss is low.
 
-Meaning:
-- all member samples get label `1`
-- all non-member samples get label `0`
+If it assigns a low probability to the correct class, loss is high.
 
-This does not affect the target model.
-It is just used to measure how good the attack is.
+Members often have lower loss than non-members.
 
 ---
 
-### 8. Getting confidence for both groups
+### `build_attack_features(...)`
 
-```python
-member_confidences = get_confidence_scores(model, X_member)
-non_member_confidences = get_confidence_scores(model, X_non_member)
-```
+This function turns target-model behavior into an attack dataset.
 
-This is the core comparison.
+For each sample, it computes:
+- max confidence
+- true-class confidence
+- loss
+- entropy
+- correctness
+- membership label
 
-The attack checks whether the model seems more certain on members than on non-members.
+This is a key step because it transforms the privacy problem into a second machine-learning problem.
 
-If it does, that can be exploited.
-
----
-
-### 9. Combining everything into one evaluation set
-
-```python
-all_confidences = np.concatenate([member_confidences, non_member_confidences])
-true_membership = np.concatenate([true_member_flags, true_non_member_flags])
-```
-
-This creates one complete set of:
-- confidence scores
-- ground-truth membership labels
-
-This makes it possible to evaluate the attack in one step.
+Now the attack model can learn from these behavior signals.
 
 ---
 
-### 10. Choosing a threshold
+# Threshold Attack vs Learned Attack
 
-```python
-threshold = (member_confidences.mean() + non_member_confidences.mean()) / 2
-```
+A strong way to present your project is to explain that it contains **two attack styles**.
 
-This chooses a simple rule boundary.
+## 1. Threshold attack
+A simple rule:
+- if confidence is above a threshold, guess member
+- otherwise, guess non-member
 
-If member confidence average is higher than non-member confidence average, then the midpoint becomes the threshold.
+This is easy to understand and useful as a baseline.
 
-Example:
-- average member confidence = `0.91`
-- average non-member confidence = `0.83`
+## 2. Learned attack
+A second classifier is trained on attack features.
 
-Then threshold = `0.87`
+That classifier learns patterns in:
+- confidence
+- loss
+- entropy
+- correctness
 
-That means:
-- confidence >= `0.87` → guess member
-- confidence < `0.87` → guess non-member
-
-This is a basic baseline method.
-
-It is not the most advanced attack possible, but it is easy to understand and useful for a first experiment.
+This is more sophisticated and more presentation-worthy.
 
 ---
 
-### 11. Predicting membership
 
-```python
-predicted_membership = (all_confidences >= threshold).astype(int)
-```
 
-This turns the confidence scores into binary guesses.
-
-If the score is high enough, predict `1` for member.
-Otherwise, predict `0` for non-member.
-
----
-
-### 12. Measuring attack success
-
-```python
-attack_accuracy = accuracy_score(true_membership, predicted_membership)
-```
-
-This computes the percentage of correct membership guesses.
-
-For example:
-- if attack accuracy is `0.62`, that means the attack correctly guessed membership 62% of the time
-- since the setup is balanced, random guessing would be around 50%
-
-So `0.62` would indicate meaningful leakage
-
----
-
-## What You Should Expect When Running `attack.py`
-
-When you run:
-
-```bash
-python attack.py
-```
-
-you may see something like:
-
-```text
-Attack threshold: 0.87
-Attack accuracy: 0.61
-Average member confidence: 0.91
-Average non-member confidence: 0.83
-```
-
-These numbers will vary.
-
-The key pattern to watch for is:
-
-- average member confidence > average non-member confidence
-- attack accuracy > 0.50
-
-If both happen, then the model is leaking some information about membership.
-
----
-
-# How All Three Files Work Together
-
-This is the full relationship:
-
-## `dataset.py`
-Creates the member and non-member groups
-
-## `train.py`
-Uses those groups to train the target model
-
-## `attack.py`
-Uses the trained model's confidence behavior to infer membership
-
----
-
-## Execution Flow
-
-When you run:
-
-```bash
-python attack.py
-```
-
-the following happens:
-
-1. `attack.py` calls `train_target_model()`
-2. `train.py` calls `load_data()`
-3. `dataset.py` loads and samples IMDB
-4. `train.py` vectorizes text and trains the model
-5. `attack.py` queries the model for confidence scores
-6. `attack.py` applies a threshold rule
-7. `attack.py` prints attack metrics
-
-So even though the command starts in `attack.py`, all three files participate.
-
----
-
-# Important Concepts Explained Clearly
-
-## Member
-
-A **member** is a data sample that the model actually saw during training.
-
-In this project:
-- members come from the sampled training split
-
-## Non-member
-
-A **non-member** is a data sample that the model did not see during training.
-
-In this project:
-- non-members come from the sampled test split
-
-## Target Model
-
-The **target model** is the model being attacked.
-
-In this project:
-- the target model is logistic regression trained on TF-IDF features
-
-## Confidence Score
-
-A **confidence score** is a measure of how certain the model is about its prediction.
-
-In this project:
-- it is the maximum predicted class probability
-
-## Overfitting
-
-**Overfitting** happens when a model fits its training data too closely and generalizes less well to new data.
-
-This can make membership inference easier because:
-- the model may be very confident on training data
-- the model may be less confident on unseen data
-
-## Generalization
-
-**Generalization** means how well a model performs on new, unseen data.
-
-A model with good generalization does not behave too differently between training data and unseen data.
-
-When the difference grows too much, privacy leakage often becomes easier to detect.
-
----
-
-# Why This Attack Works
-
-This attack works because the model may not behave identically on every sample.
-
-Training data often has a privileged status:
-- the model has already adjusted its parameters based on those samples
-- the model may have lower uncertainty on them
-- the model may have lower loss on them
-- the model may show stronger confidence on them
-
-An attacker does not need to know the internal details of every training step.
-Sometimes just the output probabilities are enough to exploit this difference.
-
----
-
-# Why This Matters for Privacy
-
-A membership inference attack does not necessarily reconstruct the full training data.
-
-But it can still reveal something sensitive:
-
-> whether a specific sample was present in training
-
-That alone can be harmful in certain domains.
-
-For example:
-- if a model was trained on hospital records, membership could reveal whether someone was part of that dataset
-- if a model was trained on private company documents, membership could reveal whether a particular document was included
-- if a model was trained on confidential messages, membership could reveal whether a person's message was used
-
-That is why membership inference is considered a privacy attack.
-
----
-
-# Example Interpretation of Results
-
-Suppose you get:
-
-```text
-Member accuracy: 0.98
-Non-member accuracy: 0.84
-Attack threshold: 0.88
-Attack accuracy: 0.63
-Average member confidence: 0.92
-Average non-member confidence: 0.84
-```
-
-Here is how to interpret that:
-
-- The model performs very well on member data
-- The model performs a bit worse on non-member data
-- The model is, on average, more confident on member data
-- The attack can use this difference to guess membership better than random chance
-
-Since the attack accuracy is `0.63`, and random guessing would be around `0.50`, the model is leaking some information.
-
-That does not mean the model is catastrophically insecure.
-But it does mean there is a measurable privacy signal.
-
----
-
-# Limitations of This Version of the Project
-
-This is a clean baseline experiment, but it is still simple.
-
-Some limitations are:
-
-- it uses only one target model type
-- it uses a simple confidence-threshold attack
-- it uses a relatively small subset of data
-- it does not yet compare multiple attack metrics
-- it does not yet plot distributions
-- it does not yet use shadow models or more advanced methods
-
-That is okay for a first experiment.
-The goal is to understand the mechanism clearly before increasing complexity.
-
----
-
-# Good Next Improvements
-
-Once this baseline works, good next steps are:
-
-1. **Plot confidence distributions**
-   - compare member confidence histogram versus non-member confidence histogram
-
-2. **Use prediction loss**
-   - loss can sometimes be an even better membership signal than raw confidence
-
-3. **Try stronger overfitting**
-   - smaller training sets or more expressive models may increase leakage
-
-4. **Test different models**
-   - compare logistic regression with neural networks
-
-5. **Tune thresholds more carefully**
-   - instead of a simple midpoint, search for a threshold that maximizes attack performance
-
-6. **Add more metrics**
-   - precision
-   - recall
-   - ROC-AUC
-
----
-
-# How to Run the Project
-
-From your project root, make sure your virtual environment is active, then run:
-
-```bash
-python dataset.py
-python train.py
-python attack.py
-```
-
-## What each command does
-
-### `python dataset.py`
-Checks that the data loading and splitting works
-
-### `python train.py`
-Trains the target model and prints model accuracy
-
-### `python attack.py`
-Runs the full membership inference attack and prints the attack results
-
----
-
-# Final Summary
-
-This project demonstrates a full, beginner-friendly membership inference attack pipeline:
-
-- `dataset.py` creates the member and non-member groups
-- `train.py` trains the target sentiment classifier
-- `attack.py` uses confidence scores to guess which samples were part of training
-
-The main lesson is this:
-
-> Models can sometimes reveal whether a sample was used in training, even if they only expose prediction outputs.
-
-That is what makes membership inference an important privacy topic in machine learning and large language model research.

@@ -1,38 +1,42 @@
-# Why: we import the prepared member and non-member data from dataset.py instead of duplicating data logic.
+# Why: load_data gives us the prepared member and non-member groups from dataset.py.
 from dataset import load_data
 
-# Why: TfidfVectorizer converts raw review text into numerical features the classifier can learn from.
+# Why: TfidfVectorizer converts raw text into numerical feature vectors the model can learn from.
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-# Why: LogisticRegression is a simple, fast baseline model for text classification.
+# Why: LogisticRegression is a simple and effective baseline model for text classification.
 from sklearn.linear_model import LogisticRegression
 
 
-# Why: wrapping the training workflow in a function makes it reusable from attack.py.
-def train_target_model():
-    # Why: load the member and non-member sets for the controlled experiment.
-    member_texts, member_labels, non_member_texts, non_member_labels = load_data()
+# Why: this function handles the full target-model training workflow and returns everything needed later.
+def train_target_model(member_size=500, non_member_size=500, random_state=42):
+    # Why: load the controlled experiment data so the target model only trains on members.
+    member_texts, member_labels, non_member_texts, non_member_labels = load_data(
+        member_size=member_size,
+        non_member_size=non_member_size,
+        random_state=random_state,
+    )
 
-    # Why: the vectorizer learns a vocabulary from member data only, which matches a real training setup.
+    # Why: the vectorizer learns a vocabulary from member data only, which avoids leakage from unseen data.
     vectorizer = TfidfVectorizer(max_features=5000, stop_words="english")
 
-    # Why: fit_transform learns the vocabulary on training members and converts them into feature vectors.
+    # Why: fit_transform learns the vocabulary from member text and converts it into feature vectors.
     X_member = vectorizer.fit_transform(member_texts)
 
-    # Why: transform applies that same vocabulary to unseen non-member reviews.
+    # Why: transform applies the same learned vocabulary to non-member text without refitting.
     X_non_member = vectorizer.transform(non_member_texts)
 
-    # Why: this is the target model that the membership inference attack will later probe.
-    model = LogisticRegression(max_iter=1000, random_state=42)
+    # Why: the target model is the classifier we will later attack.
+    model = LogisticRegression(max_iter=1000, random_state=random_state)
 
-    # Why: the model must train only on member data so those samples truly count as members.
+    # Why: the model must only train on members for the membership labels to be meaningful.
     model.fit(X_member, member_labels)
 
-    # Why: these scores give a quick sanity check before moving to the attack stage.
+    # Why: these scores show how differently the model behaves on seen versus unseen data.
     member_accuracy = model.score(X_member, member_labels)
     non_member_accuracy = model.score(X_non_member, non_member_labels)
 
-    # Why: returning everything needed later keeps attack.py simple.
+    # Why: returning a dictionary keeps the code organized and makes attack.py easier to write.
     return {
         "model": model,
         "vectorizer": vectorizer,
@@ -47,11 +51,11 @@ def train_target_model():
     }
 
 
-# Why: this block lets you run train.py directly to verify the target model trains correctly.
+# Why: this block lets you run train.py directly to verify target-model training.
 if __name__ == "__main__":
-    # Why: train the model and capture all returned experiment objects.
+    # Why: train the model and capture all relevant outputs.
     results = train_target_model()
 
-    # Why: print accuracies so we can check whether the model behaves differently on members vs non-members.
+    # Why: print these values so you can inspect whether the target model behaves differently on members and non-members.
     print("Member accuracy:", results["member_accuracy"])
     print("Non-member accuracy:", results["non_member_accuracy"])

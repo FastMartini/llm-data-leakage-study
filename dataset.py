@@ -1,24 +1,24 @@
-# Why: load_dataset downloads and loads the IMDB dataset from Hugging Face.
+# Why: load_dataset downloads and loads the IMDB dataset in a structured format.
 from datasets import load_dataset
 
-# Why: train_test_split lets us sample smaller, reproducible member and non-member subsets.
+# Why: train_test_split helps us create reproducible member and non-member subsets.
 from sklearn.model_selection import train_test_split
 
 
-# Why: putting the dataset logic in a function makes it reusable from train.py and attack.py.
+# Why: this function centralizes dataset loading and splitting so the rest of the project can reuse it.
 def load_data(member_size=500, non_member_size=500, random_state=42):
-    # Why: this downloads and loads the full IMDB dataset into memory.
+    # Why: this loads the full IMDB dataset, including official train and test splits.
     dataset = load_dataset("imdb")
 
-    # Why: these are the full official train texts and labels that we will sample members from.
+    # Why: these are the full text and label lists from the official training split.
     train_texts_full = dataset["train"]["text"]
     train_labels_full = dataset["train"]["label"]
 
-    # Why: these are the full official test texts and labels that we will sample non-members from.
+    # Why: these are the full text and label lists from the official test split.
     test_texts_full = dataset["test"]["text"]
     test_labels_full = dataset["test"]["label"]
 
-    # Why: members are sampled from the training split because the target model will train on them.
+    # Why: members must come from the training split because the target model will see them during training.
     member_texts, _, member_labels, _ = train_test_split(
         train_texts_full,
         train_labels_full,
@@ -27,7 +27,7 @@ def load_data(member_size=500, non_member_size=500, random_state=42):
         random_state=random_state,
     )
 
-    # Why: non-members are sampled from the test split so they remain unseen during training.
+    # Why: non-members must come from the test split so they remain unseen by the target model.
     non_member_texts, _, non_member_labels, _ = train_test_split(
         test_texts_full,
         test_labels_full,
@@ -36,19 +36,19 @@ def load_data(member_size=500, non_member_size=500, random_state=42):
         random_state=random_state,
     )
 
-    # Why: returning these four objects makes the dataset easy to reuse elsewhere.
+    # Why: returning these four objects gives downstream files exactly what they need.
     return member_texts, member_labels, non_member_texts, non_member_labels
 
 
-# Why: this block lets you run dataset.py directly for a quick sanity check without affecting imports.
+# Why: this block lets you test dataset loading directly without affecting imports in other files.
 if __name__ == "__main__":
-    # Why: load the default dataset split so we can verify everything is working.
+    # Why: load the default controlled experiment split for a sanity check.
     member_texts, member_labels, non_member_texts, non_member_labels = load_data()
 
-    # Why: these prints confirm the two groups were created with the expected sizes.
+    # Why: these prints confirm the split sizes are correct.
     print("Members:", len(member_texts))
     print("Non-members:", len(non_member_texts))
 
-    # Why: these prints help verify that labels exist and the text looks correct.
+    # Why: these prints help verify that the data looks valid.
     print("First member label:", member_labels[0])
     print("First member review preview:", member_texts[0][:200])
