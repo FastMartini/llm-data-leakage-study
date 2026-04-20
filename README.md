@@ -15,7 +15,6 @@ This guide is written for beginners. It explains:
 - what each Python file does
 - what each major block of code is doing
 - why the project is structured this way
-- how to talk about the project clearly in a presentation
 
 ---
 
@@ -88,7 +87,7 @@ Each file has a specific purpose:
 - `train.py` trains the target model
 - `attack.py` performs the privacy attack
 
-This is a good design because each file has one main job. That makes the code easier to understand, test, explain, and present.
+This is a good design because each file has one main job. That makes the code easier to understand, test, explain, and .
 
 ---
 
@@ -408,7 +407,7 @@ General intuition:
 - words that appear frequently in one review may matter
 - words that appear in almost every review may matter less
 
-This gives the model a numeric representation of language.
+This gives the model a numeric reation of language.
 
 ---
 
@@ -512,7 +511,7 @@ It is a strong baseline because it is:
 - simple
 - fast
 - standard
-- easy to explain in a presentation
+- easy to explain in a ation
 
 ---
 
@@ -787,7 +786,7 @@ def run_threshold_attack(member_attack_df, non_member_attack_df):
     # Why: these are the ground-truth membership labels used to evaluate the baseline attack.
     true_membership = combined_df["membership"]
 
-    # Why: returning multiple metrics makes the attack easier to present and discuss.
+    # Why: returning multiple metrics makes the attack easier to  and discuss.
     return {
         "threshold": threshold,
         "accuracy": accuracy_score(true_membership, predicted_membership),
@@ -847,13 +846,13 @@ def run_learned_attack(attack_df, random_state=42):
 
 # Why: this helper draws the ROC curve so you can visually explain how well the learned attack separates the two classes.
 def plot_roc_curve(fpr, tpr, roc_auc):
-    # Why: creating a dedicated figure keeps the ROC visualization clean and presentation-ready.
+    # Why: creating a dedicated figure keeps the ROC visualization clean and ation-ready.
     plt.figure(figsize=(8, 6))
 
     # Why: this line shows the actual ROC curve traced by varying the decision threshold.
     plt.plot(fpr, tpr, label=f"Learned Attack ROC Curve (AUC = {roc_auc:.3f})", linewidth=2)
 
-    # Why: this diagonal line represents random guessing and gives an easy visual baseline for comparison.
+    # Why: this diagonal line res random guessing and gives an easy visual baseline for comparison.
     plt.plot([0, 1], [0, 1], linestyle="--", label="Random Guessing")
 
     # Why: axis labels make the math interpretation of the plot immediately clear.
@@ -866,10 +865,10 @@ def plot_roc_curve(fpr, tpr, roc_auc):
     # Why: the legend helps distinguish the learned attack from the random baseline.
     plt.legend(loc="lower right")
 
-    # Why: the grid improves readability when discussing specific parts of the curve during presentation.
+    # Why: the grid improves readability when discussing specific parts of the curve during ation.
     plt.grid(True)
 
-    # Why: show displays the plot window so you can immediately inspect or present the result.
+    # Why: show displays the plot window so you can immediately inspect or  the result.
     plt.show()
 
 
@@ -914,7 +913,7 @@ def run_membership_inference_experiment(member_size=500, non_member_size=500, ra
     # Why: the learned attack uses several features at once and is more sophisticated than the baseline rule.
     learned_results = run_learned_attack(full_attack_df, random_state=random_state)
 
-    # Why: returning everything makes it easy to inspect results, save them, or present them later.
+    # Why: returning everything makes it easy to inspect results, save them, or  them later.
     return {
         "target_member_accuracy": training_results["member_accuracy"],
         "target_non_member_accuracy": training_results["non_member_accuracy"],
@@ -1006,7 +1005,7 @@ That makes it easier to:
 - inspect the attack dataset
 - print previews
 - select columns for the learned attack model
-- explain what each row represents
+- explain what each row res
 
 Each row corresponds to one sample, and each column is one attack signal.
 
@@ -1138,11 +1137,9 @@ The ROC curve shows the relationship between:
 - **True Positive Rate** on the y-axis
 - **False Positive Rate** on the x-axis
 
-The diagonal reference line represents random guessing.
+The diagonal reference line res random guessing.
 
 If the learned attack curve rises well above the diagonal, that means the attack is separating members from non-members better than chance.
-
-This is useful in presentations because it gives a visual explanation of privacy leakage.
 
 ---
 
@@ -1180,8 +1177,6 @@ That means the script now provides both:
 ---
 
 # Threshold Attack vs Learned Attack
-
-A strong way to present the updated project is to explain that it now contains **two attack styles**.
 
 ## 1. Threshold attack
 A simple rule-based baseline:
