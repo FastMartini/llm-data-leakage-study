@@ -56,7 +56,6 @@ This guide is written for beginners. It explains:
 - what each Python file does
 - what each major block of code is doing
 - why the project is structured this way
-- how to talk about the project clearly in a presentation
 
 ---
 
@@ -129,7 +128,7 @@ Each file has a specific purpose:
 - `train.py` trains the target model
 - `attack.py` performs the privacy attack
 
-This is a good design because each file has one main job. That makes the code easier to understand, test, explain, and present.
+This is a good design because each file has one main job. That makes the code easier to understand, test, explain, and .
 
 ---
 
@@ -449,7 +448,7 @@ General intuition:
 - words that appear frequently in one review may matter
 - words that appear in almost every review may matter less
 
-This gives the model a numeric representation of language.
+This gives the model a numeric reation of language.
 
 ---
 
@@ -553,7 +552,7 @@ It is a strong baseline because it is:
 - simple
 - fast
 - standard
-- easy to explain in a presentation
+- easy to explain in a ation
 
 ---
 
@@ -666,54 +665,57 @@ Its job is to use the target model’s behavior to predict whether a sample was:
 - a member
 - a non-member
 
-This is the privacy part of the project.
+This is the privacy stage of the project.
 
 ---
 
 ## Main idea
 
-The target model never explicitly says:
+The target model never directly says:
+- “this sample was in my training set”
+- “this sample was not in my training set”
 
-- “yes, I trained on this review”
-- “no, I did not train on this review”
+So the attacker must infer membership from how the model behaves on each sample.
 
-So the attacker must infer membership indirectly.
+In the updated version of this project, `attack.py` now includes **two attack approaches**:
 
-The attacker uses behavior-based signals such as:
-- confidence
-- true-class confidence
-- loss
-- entropy
-- correctness
+1. a **baseline threshold attack** based on confidence
+2. a **learned attack model** trained on several behavior-based signals
 
-These signals can differ between:
-- samples seen during training
-- samples never seen during training
+This makes the project stronger because you can compare a simple interpretable attack against a more sophisticated one.
 
 ---
 
 ## What the attack features mean
 
 ### Max confidence
-How certain the model is about its chosen label.
+The highest predicted probability among all classes.
+
+This tells you how certain the model was about its final prediction.
 
 ### True-class confidence
-How much probability the model assigns to the correct label.
+The probability assigned to the correct label.
+
+This is often more informative than max confidence because it focuses on the true class specifically.
 
 ### Loss
-How well the model fits the true label.
+The negative log probability of the true class.
+
+Lower loss means the model handled that sample more confidently and correctly.
 
 ### Entropy
-How uncertain the model is overall.
+A measure of overall uncertainty in the full probability distribution.
+
+Lower entropy means the model was more certain.
 
 ### Correctness
-Whether the model predicted the label correctly.
+Whether the model predicted the true label correctly.
 
-These signals together create an attack dataset.
+This is a simple binary signal that can still help separate members from non-members.
 
 ---
 
-## Code
+## Updated `attack.py` Code
 
 ```python
 # Why: this gives attack.py access to the trained target model and its feature matrices.
@@ -732,7 +734,17 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
 # Why: these metrics provide a stronger evaluation than plain accuracy alone.
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_auc_score,
+    roc_curve,
+)
+
+# Why: matplotlib is used to visualize the ROC curve so you can show separability of members vs non-members.
+import matplotlib.pyplot as plt
 
 
 # Why: this helper computes Shannon entropy, which measures how uncertain the model is about a prediction.
@@ -795,6 +807,211 @@ def build_attack_features(model, feature_matrix, true_labels, membership_label):
     )
 
     return attack_df
+
+
+# Why: this baseline attack gives you a simple, interpretable result before moving to the learned attack model.
+def run_threshold_attack(member_attack_df, non_member_attack_df):
+    # Why: these are the average confidence values for members and non-members, used to define a simple threshold.
+    member_mean_confidence = member_attack_df["max_confidence"].mean()
+    non_member_mean_confidence = non_member_attack_df["max_confidence"].mean()
+
+    # Why: the midpoint between group means creates a basic decision boundary.
+    threshold = (member_mean_confidence + non_member_mean_confidence) / 2
+
+    # Why: combine both groups into a single dataset for evaluation of the threshold rule.
+    combined_df = pd.concat([member_attack_df, non_member_attack_df], ignore_index=True)
+
+    # Why: if confidence exceeds the threshold, the baseline attack guesses the sample is a member.
+    predicted_membership = (combined_df["max_confidence"] >= threshold).astype(int)
+
+    # Why: these are the ground-truth membership labels used to evaluate the baseline attack.
+    true_membership = combined_df["membership"]
+
+    # Why: returning multiple metrics makes the attack easier to  and discuss.
+    return {
+        "threshold": threshold,
+        "accuracy": accuracy_score(true_membership, predicted_membership),
+        "precision": precision_score(true_membership, predicted_membership),
+        "recall": recall_score(true_membership, predicted_membership),
+        "f1": f1_score(true_membership, predicted_membership),
+    }
+
+
+# Why: this learned attack is more sophisticated because it uses several target-model signals together.
+def run_learned_attack(attack_df, random_state=42):
+    # Why: these are the attack features that the attack model will use to predict membership.
+    X_attack = attack_df[
+        ["max_confidence", "true_class_confidence", "loss", "entropy", "correctness"]
+    ]
+
+    # Why: this is the true membership label that the attack model is trying to learn.
+    y_attack = attack_df["membership"]
+
+    # Why: splitting the attack dataset prevents us from evaluating the attack model on the same rows it trained on.
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_attack,
+        y_attack,
+        test_size=0.30,
+        stratify=y_attack,
+        random_state=random_state,
+    )
+
+    # Why: logistic regression is a simple but effective baseline attack classifier for tabular attack features.
+    attack_model = LogisticRegression(max_iter=1000, random_state=random_state)
+
+    # Why: the attack model learns patterns in confidence, loss, entropy, and correctness that separate members from non-members.
+    attack_model.fit(X_train, y_train)
+
+    # Why: predict gives hard membership labels for standard classification metrics.
+    y_pred = attack_model.predict(X_test)
+
+    # Why: predict_proba gives membership scores used for ROC-AUC, which is a stronger separability metric.
+    y_scores = attack_model.predict_proba(X_test)[:, 1]
+
+    # Why: ROC curve points let us visualize the tradeoff between true positive rate and false positive rate.
+    fpr, tpr, thresholds = roc_curve(y_test, y_scores)
+
+    # Why: these metrics give a more complete view of the attack's success.
+    return {
+        "accuracy": accuracy_score(y_test, y_pred),
+        "precision": precision_score(y_test, y_pred),
+        "recall": recall_score(y_test, y_pred),
+        "f1": f1_score(y_test, y_pred),
+        "roc_auc": roc_auc_score(y_test, y_scores),
+        "fpr": fpr,
+        "tpr": tpr,
+        "roc_thresholds": thresholds,
+        "attack_model": attack_model,
+    }
+
+
+# Why: this helper draws the ROC curve so you can visually explain how well the learned attack separates the two classes.
+def plot_roc_curve(fpr, tpr, roc_auc):
+    # Why: creating a dedicated figure keeps the ROC visualization clean and ation-ready.
+    plt.figure(figsize=(8, 6))
+
+    # Why: this line shows the actual ROC curve traced by varying the decision threshold.
+    plt.plot(fpr, tpr, label=f"Learned Attack ROC Curve (AUC = {roc_auc:.3f})", linewidth=2)
+
+    # Why: this diagonal line res random guessing and gives an easy visual baseline for comparison.
+    plt.plot([0, 1], [0, 1], linestyle="--", label="Random Guessing")
+
+    # Why: axis labels make the math interpretation of the plot immediately clear.
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+
+    # Why: the title tells the audience exactly what model and metric they are looking at.
+    plt.title("ROC Curve for Learned Membership Inference Attack")
+
+    # Why: the legend helps distinguish the learned attack from the random baseline.
+    plt.legend(loc="lower right")
+
+    # Why: the grid improves readability when discussing specific parts of the curve during ation.
+    plt.grid(True)
+
+    # Why: show displays the plot window so you can immediately inspect or  the result.
+    plt.show()
+
+
+# Why: this function runs the full upgraded attack pipeline from target-model training to attack evaluation.
+def run_membership_inference_experiment(member_size=500, non_member_size=500, random_state=42):
+    # Why: the target model must exist before we can extract attack signals from its behavior.
+    training_results = train_target_model(
+        member_size=member_size,
+        non_member_size=non_member_size,
+        random_state=random_state,
+    )
+
+    # Why: these objects are needed to build attack features for both groups.
+    model = training_results["model"]
+    X_member = training_results["X_member"]
+    X_non_member = training_results["X_non_member"]
+    member_labels = np.array(training_results["member_labels"])
+    non_member_labels = np.array(training_results["non_member_labels"])
+
+    # Why: these rows describe how the target model behaves on member samples.
+    member_attack_df = build_attack_features(
+        model=model,
+        feature_matrix=X_member,
+        true_labels=member_labels,
+        membership_label=1,
+    )
+
+    # Why: these rows describe how the target model behaves on non-member samples.
+    non_member_attack_df = build_attack_features(
+        model=model,
+        feature_matrix=X_non_member,
+        true_labels=non_member_labels,
+        membership_label=0,
+    )
+
+    # Why: combining both groups creates the full attack dataset for the learned attack model.
+    full_attack_df = pd.concat([member_attack_df, non_member_attack_df], ignore_index=True)
+
+    # Why: the threshold attack gives you a simple baseline to compare against the learned attack.
+    threshold_results = run_threshold_attack(member_attack_df, non_member_attack_df)
+
+    # Why: the learned attack uses several features at once and is more sophisticated than the baseline rule.
+    learned_results = run_learned_attack(full_attack_df, random_state=random_state)
+
+    # Why: returning everything makes it easy to inspect results, save them, or  them later.
+    return {
+        "target_member_accuracy": training_results["member_accuracy"],
+        "target_non_member_accuracy": training_results["non_member_accuracy"],
+        "member_avg_confidence": member_attack_df["max_confidence"].mean(),
+        "non_member_avg_confidence": non_member_attack_df["max_confidence"].mean(),
+        "member_avg_loss": member_attack_df["loss"].mean(),
+        "non_member_avg_loss": non_member_attack_df["loss"].mean(),
+        "threshold_attack": threshold_results,
+        "learned_attack": learned_results,
+        "attack_dataframe_preview": full_attack_df.head(10),
+    }
+
+
+# Why: this block lets you run the complete experiment directly from the terminal.
+if __name__ == "__main__":
+    # Why: run the full upgraded membership inference experiment using the default controlled setup.
+    results = run_membership_inference_experiment()
+
+    # Why: these prints summarize how the target model behaves on seen versus unseen samples.
+    print("=== Target Model Performance ===")
+    print("Member accuracy:", results["target_member_accuracy"])
+    print("Non-member accuracy:", results["target_non_member_accuracy"])
+    print("Average member confidence:", results["member_avg_confidence"])
+    print("Average non-member confidence:", results["non_member_avg_confidence"])
+    print("Average member loss:", results["member_avg_loss"])
+    print("Average non-member loss:", results["non_member_avg_loss"])
+    print()
+
+    # Why: these prints show the simple baseline threshold attack results.
+    print("=== Baseline Threshold Attack ===")
+    print("Threshold:", results["threshold_attack"]["threshold"])
+    print("Accuracy:", results["threshold_attack"]["accuracy"])
+    print("Precision:", results["threshold_attack"]["precision"])
+    print("Recall:", results["threshold_attack"]["recall"])
+    print("F1:", results["threshold_attack"]["f1"])
+    print()
+
+    # Why: these prints show the stronger learned attack model results.
+    print("=== Learned Attack Model ===")
+    print("Accuracy:", results["learned_attack"]["accuracy"])
+    print("Precision:", results["learned_attack"]["precision"])
+    print("Recall:", results["learned_attack"]["recall"])
+    print("F1:", results["learned_attack"]["f1"])
+    print("ROC-AUC:", results["learned_attack"]["roc_auc"])
+    print()
+
+    # Why: this preview lets you inspect what the attack dataset actually looks like.
+    print("=== Attack Feature Preview ===")
+    print(results["attack_dataframe_preview"])
+    print()
+
+    # Why: plotting the ROC curve gives a visual explanation of how well the learned attack separates members and non-members.
+    plot_roc_curve(
+        results["learned_attack"]["fpr"],
+        results["learned_attack"]["tpr"],
+        results["learned_attack"]["roc_auc"],
+    )
 ```
 
 ---
@@ -803,107 +1020,222 @@ def build_attack_features(model, feature_matrix, true_labels, membership_label):
 
 ### `from train import train_target_model`
 
-This imports the trained target-model pipeline.
+This imports the target-model pipeline from `train.py`.
 
-That means `attack.py` does not have to repeat training logic.
+That keeps the attack stage separate from the training stage, which makes the project cleaner and easier to explain.
 
 ---
 
 ### Why NumPy is used
 
-`numpy` handles:
-- arrays
-- math
-- indexing
-- probability-based calculations
+`numpy` is used for:
+- vector math
+- probability calculations
+- clipping values for numerical stability
+- selecting the true-class probability for each sample
 
-It is especially useful for:
-- entropy
-- loss
-- combining attack signals
+It is especially important for the entropy and loss calculations.
 
 ---
 
 ### Why pandas is used
 
-`pandas` makes the attack features easier to organize and inspect.
+`pandas` stores the attack features in a table-like structure.
 
-Instead of handling loose arrays everywhere, you can create a table with columns like:
-- max confidence
-- loss
-- entropy
-- correctness
-- membership
+That makes it easier to:
+- inspect the attack dataset
+- print previews
+- select columns for the learned attack model
+- explain what each row res
 
-That makes the attack model cleaner and easier to explain.
+Each row corresponds to one sample, and each column is one attack signal.
 
 ---
 
 ### `compute_entropy(probabilities)`
 
-Entropy measures uncertainty.
+This computes Shannon entropy:
+
+$$
+H(p) = -\sum_i p_i \log p_i
+$$
+
+Interpretation:
+- low entropy = the model is very certain
+- high entropy = the model is less certain
 
 Examples:
-- `[0.99, 0.01]` → low entropy, very certain
-- `[0.50, 0.50]` → high entropy, very uncertain
+- `[0.99, 0.01]` gives low entropy
+- `[0.50, 0.50]` gives high entropy
 
-Models are often more certain on training data, so entropy can be a useful membership signal.
+Members often have lower entropy because the model may be more certain on samples it saw during training.
 
 ---
 
 ### `compute_true_class_loss(probabilities, true_labels)`
 
-Loss measures how well the model handled the true label.
+This computes the negative log probability of the true class:
 
-If the model assigns a high probability to the correct class, loss is low.
+$$
+\text{loss}(x, y) = -\log p(y \mid x)
+$$
 
-If it assigns a low probability to the correct class, loss is high.
+Interpretation:
+- low loss means the model gave high probability to the correct class
+- high loss means the model gave low probability to the correct class
 
-Members often have lower loss than non-members.
+This is one of the strongest membership signals because members often have lower loss than non-members.
 
 ---
 
 ### `build_attack_features(...)`
 
-This function turns target-model behavior into an attack dataset.
+This function converts target-model outputs into a structured attack dataset.
 
 For each sample, it computes:
+- `max_confidence`
+- `true_class_confidence`
+- `loss`
+- `entropy`
+- `correctness`
+- `membership`
+
+This is the bridge between the target model and the attack model.
+
+Instead of attacking raw text directly, the attack works on how the model behaves.
+
+---
+
+### `run_threshold_attack(...)`
+
+This is the simple baseline attack.
+
+It works like this:
+1. compute the average max confidence for members
+2. compute the average max confidence for non-members
+3. place the threshold halfway between those two means
+4. predict “member” when a sample’s confidence is above the threshold
+
+This attack is useful because it is easy to explain:
+
+> If the target model is much more confident on seen samples, then confidence alone may reveal membership.
+
+Even if this baseline is not perfect, it gives you an interpretable starting point.
+
+---
+
+### `run_learned_attack(...)`
+
+This is the stronger attack.
+
+Instead of relying on only one signal, it uses:
 - max confidence
 - true-class confidence
 - loss
 - entropy
 - correctness
-- membership label
 
-This is a key step because it transforms the privacy problem into a second machine-learning problem.
+These features are split into attack-train and attack-test sets so the attack model is evaluated fairly.
 
-Now the attack model can learn from these behavior signals.
+The attack classifier is logistic regression, which predicts:
+- `1` for member
+- `0` for non-member
+
+This function returns:
+- accuracy
+- precision
+- recall
+- F1
+- ROC-AUC
+- false positive rates
+- true positive rates
+- ROC thresholds
+- the trained attack model itself
+
+That gives both numeric evaluation and visualization support.
+
+---
+
+### Why ROC-AUC was added
+
+Accuracy alone can be misleading.
+
+ROC-AUC measures how well the attack separates members from non-members across many thresholds, not just one fixed decision cutoff.
+
+Interpretation:
+- `0.50` means roughly random guessing
+- closer to `1.00` means stronger separation
+
+This makes ROC-AUC one of the most important metrics in the upgraded version of the project.
+
+---
+
+### `plot_roc_curve(fpr, tpr, roc_auc)`
+
+This helper visualizes the learned attack.
+
+The ROC curve shows the relationship between:
+- **True Positive Rate** on the y-axis
+- **False Positive Rate** on the x-axis
+
+The diagonal reference line res random guessing.
+
+If the learned attack curve rises well above the diagonal, that means the attack is separating members from non-members better than chance.
+
+---
+
+### `run_membership_inference_experiment(...)`
+
+This is the full experiment driver.
+
+It performs the complete pipeline:
+1. train the target model
+2. build attack features for members
+3. build attack features for non-members
+4. combine both groups into one attack dataset
+5. run the baseline threshold attack
+6. run the learned attack
+7. return all important results
+
+This function is useful because it centralizes the experiment into one callable workflow.
+
+---
+
+### The `__main__` block
+
+When `attack.py` is run directly, it:
+1. runs the full experiment
+2. prints target-model statistics
+3. prints baseline threshold attack metrics
+4. prints learned attack metrics
+5. prints a preview of the attack dataset
+6. plots the ROC curve
+
+That means the script now provides both:
+- numerical evidence
+- visual evidence
 
 ---
 
 # Threshold Attack vs Learned Attack
 
-A strong way to present your project is to explain that it contains **two attack styles**.
-
 ## 1. Threshold attack
-A simple rule:
-- if confidence is above a threshold, guess member
-- otherwise, guess non-member
+A simple rule-based baseline:
+- compute a confidence threshold
+- guess member when confidence is above that threshold
 
-This is easy to understand and useful as a baseline.
+This is easy to interpret and useful for showing that privacy leakage can appear even with a very simple attacker.
 
 ## 2. Learned attack
-A second classifier is trained on attack features.
+A second classifier trained on multiple attack features.
 
-That classifier learns patterns in:
+This attack is stronger because it combines:
 - confidence
+- true-class confidence
 - loss
 - entropy
 - correctness
 
-This is more sophisticated and more presentation-worthy.
-
----
-
+This gives a more realistic attack scenario and makes the experiment more complete.
 
 
