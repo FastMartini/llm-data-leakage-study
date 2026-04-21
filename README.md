@@ -1,5 +1,46 @@
 # Membership Inference Attack (MIA) Project Guide
 
+## How to run
+
+### 1. Prerequisites
+
+Create and activate a virtual environment, then install dependencies:
+
+```bash
+python -m venv venv
+```
+
+**Mac/Linux:**
+```bash
+source venv/bin/activate
+```
+
+**Windows:**
+```bash
+venv\Scripts\activate
+```
+
+Install required packages:
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+### 2. Running the Program
+
+### Step 1: Train the Target Model
+```bash
+python3 train.py
+```
+
+### Step 2: Run the Attack
+```bash
+python3 attack.py
+```
+
+---
+
 ## Overview
 
 This project demonstrates a **membership inference attack (MIA)** on a machine learning model trained on text data.
